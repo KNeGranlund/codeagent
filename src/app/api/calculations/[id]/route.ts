@@ -11,7 +11,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
   const data = await req.json()
   const calc = repo.saveCalculation(data)
   return NextResponse.json(calc)

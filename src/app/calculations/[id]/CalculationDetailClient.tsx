@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Plus, Save, FileText, Search, Download } from "lucide-react"
+import { Plus, Save, FileText, Search, Download, Settings } from "lucide-react"
 import { CalculationTree } from "@/components/CalculationTree"
 import { AddItemDialog } from "@/components/AddItemDialog"
 import { SearchDialog } from "@/components/SearchDialog"
+import { CalculationSettingsDialog } from "@/components/CalculationSettingsDialog"
 import type { Calculation, CalculationItem, ComponentItem, Package } from "@/lib/types"
 import { computeTotals } from "@/lib/utils/calc"
 import { downloadCalculationPDF } from "@/lib/utils/pdf-export"
@@ -28,6 +29,7 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
   const [calc, setCalc] = useState<Calculation>(initialCalc)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showSearchDialog, setShowSearchDialog] = useState(false)
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [addDialogParentId, setAddDialogParentId] = useState<string | undefined>()
   const [selectedItemId, setSelectedItemId] = useState<string>()
   const [selectedPosition, setSelectedPosition] = useState<number[]>()
@@ -235,6 +237,18 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
     setShowExportMenu(false)
   }
 
+  const handleUpdateSettings = (newSettings: typeof calc.settings) => {
+    setCalc(prev => {
+      const updated = {
+        ...prev,
+        settings: newSettings
+      }
+      // Recalculate totals with new settings
+      computeTotals(updated)
+      return updated
+    })
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -272,6 +286,14 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
           >
             <Plus className="h-4 w-4" />
             Add Item
+          </Button>
+          <Button 
+            onClick={() => setShowSettingsDialog(true)} 
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <Settings className="h-4 w-4" />
+            Settings
           </Button>
           <Button 
             onClick={saveCalculation} 
@@ -425,6 +447,14 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
         onOpenChange={setShowSearchDialog}
         onSelectComponent={handleSearchComponentSelect}
         onSelectPackage={handleSearchPackageSelect}
+      />
+
+      {/* Calculation Settings Dialog */}
+      <CalculationSettingsDialog
+        open={showSettingsDialog}
+        onOpenChange={setShowSettingsDialog}
+        settings={calc.settings}
+        onUpdateSettings={handleUpdateSettings}
       />
     </div>
   )
