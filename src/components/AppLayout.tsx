@@ -4,6 +4,8 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { SearchDialog } from "@/components/SearchDialog"
+import type { ComponentItem, Package } from "@/lib/types"
 import { 
   Home, 
   Calculator, 
@@ -26,6 +28,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [calculationsExpanded, setCalculationsExpanded] = useState(true)
   const [componentsExpanded, setComponentsExpanded] = useState(false)
+  const [showSearchDialog, setShowSearchDialog] = useState(false)
   const pathname = usePathname()
 
   const navigation = [
@@ -217,7 +220,12 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
 
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm" className="hidden sm:flex">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="hidden sm:flex"
+                onClick={() => setShowSearchDialog(true)}
+              >
                 <Package className="h-4 w-4 mr-2" />
                 Quick Add
               </Button>
@@ -234,6 +242,22 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Quick Search Dialog */}
+      <SearchDialog 
+        open={showSearchDialog}
+        onOpenChange={setShowSearchDialog}
+        onSelectComponent={(component) => {
+          // For now, just close the dialog - in a real app this would add to current calculation
+          console.log('Selected component:', component)
+          setShowSearchDialog(false)
+        }}
+        onSelectPackage={(pkg) => {
+          // For now, just close the dialog - in a real app this would add to current calculation  
+          console.log('Selected package:', pkg)
+          setShowSearchDialog(false)
+        }}
+      />
     </div>
   )
 }
