@@ -4,6 +4,28 @@ import React, { useState } from "react"
 import { ChevronRight, ChevronDown, Plus, Package as PackageIcon, Wrench, Trash2, Target, GripVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { CalculationItem } from "@/lib/types"
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  DragOverEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import {
+  CSS,
+} from '@dnd-kit/utilities'
 
 interface TreeNodeProps {
   item: CalculationItem
@@ -17,6 +39,7 @@ interface TreeNodeProps {
   onUpdatePrice: (itemId: string, price: number) => void
   onSelect: (itemId: string, position: number[]) => void
   onMoveItem: (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside') => void
+  isDragOverlay?: boolean
 }
 
 function TreeNode({ 
@@ -30,13 +53,34 @@ function TreeNode({
   onUpdateQuantity, 
   onUpdatePrice,
   onSelect,
-  onMoveItem
+  onMoveItem,
+  isDragOverlay = false
 }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [editQty, setEditQty] = useState(item.quantity)
   const [editPrice, setEditPrice] = useState(item.unitPrice)
-  const [isDragOver, setIsDragOver] = useState<'before' | 'after' | 'inside' | null>(null)
+  
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ 
+    id: item.id,
+    data: {
+      type: 'item',
+      item: item
+    }
+  })
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
   
   const hasChildren = item.children && item.children.length > 0
   const materialCost = item.quantity * item.unitPrice
@@ -71,78 +115,39 @@ function TreeNode({
 
   const positionString = position.join('.')
 
-  const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData('text/plain', item.id)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    
-    const rect = e.currentTarget.getBoundingClientRect()
-    const y = e.clientY - rect.top
-    const height = rect.height
-    
-    if (y < height * 0.25) {
-      setIsDragOver('before')
-    } else if (y > height * 0.75) {
-      setIsDragOver('after')
-    } else {
-      setIsDragOver('inside')
-    }
-  }
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX
-    const y = e.clientY
-    
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-      setIsDragOver(null)
-    }
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    const draggedItemId = e.dataTransfer.getData('text/plain')
-    
-    if (draggedItemId !== item.id && isDragOver) {
-      onMoveItem(draggedItemId, item.id, isDragOver)
-    }
-    
-    setIsDragOver(null)
+  // Don't show drag behavior in drag overlay
+  if (isDragOverlay) {
+    return (
+      <div className="border rounded-lg bg-white shadow-lg">
+        <div className="flex items-center py-3 px-3 bg-green-50">
+          <GripVertical className="h-4 w-4 text-gray-400 mr-3" />
+          <span className="text-xs text-gray-500 min-w-[40px] font-mono mr-3">
+            {positionString}
+          </span>
+          <div className="font-medium text-sm">{item.name}</div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className={`border-b border-gray-100 ${isSelected ? 'bg-green-50 border-green-300' : ''} relative`}>
-      {/* Drop indicator lines */}
-      {isDragOver === 'before' && (
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-green-500 z-10" />
-      )}
-      {isDragOver === 'after' && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-500 z-10" />
-      )}
-      {isDragOver === 'inside' && (
-        <div className="absolute inset-0 bg-green-100 border-2 border-green-400 border-dashed z-10 opacity-50" />
-      )}
-      
+    <div 
+      ref={setNodeRef} 
+      style={style}
+      className={`border-b border-gray-100 ${isSelected ? 'bg-green-50 border-green-300' : ''} relative`}
+    >
       <div 
         className={`flex items-center py-3 px-3 hover:bg-gray-50 cursor-pointer transition-colors ${
           isSelected ? 'bg-green-100 hover:bg-green-100' : ''
         }`}
         style={{ paddingLeft: `${indentWidth + 12}px` }}
         onClick={() => onSelect(item.id, position)}
-        draggable
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
       >
         {/* Drag Handle */}
         <div 
           className="flex items-center gap-2 mr-3 cursor-grab active:cursor-grabbing"
-          onMouseDown={(e) => e.stopPropagation()}
+          {...attributes}
+          {...listeners}
         >
           <GripVertical className="h-4 w-4 text-gray-400 hover:text-gray-600" />
           <span className="text-xs text-gray-500 min-w-[40px] font-mono">
@@ -292,22 +297,27 @@ function TreeNode({
       {/* Children */}
       {isExpanded && hasChildren && (
         <div>
-          {item.children!.map((child, index) => (
-            <TreeNode
-              key={child.id}
-              item={child}
-              level={level + 1}
-              isSelected={false}
-              position={[...position, index + 1]}
-              onAddChild={onAddChild}
-              onAddPackage={onAddPackage}
-              onDelete={onDelete}
-              onUpdateQuantity={onUpdateQuantity}
-              onUpdatePrice={onUpdatePrice}
-              onSelect={onSelect}
-              onMoveItem={onMoveItem}
-            />
-          ))}
+          <SortableContext 
+            items={item.children!.map(child => child.id)} 
+            strategy={verticalListSortingStrategy}
+          >
+            {item.children!.map((child, index) => (
+              <TreeNode
+                key={child.id}
+                item={child}
+                level={level + 1}
+                isSelected={false}
+                position={[...position, index + 1]}
+                onAddChild={onAddChild}
+                onAddPackage={onAddPackage}
+                onDelete={onDelete}
+                onUpdateQuantity={onUpdateQuantity}
+                onUpdatePrice={onUpdatePrice}
+                onSelect={onSelect}
+                onMoveItem={onMoveItem}
+              />
+            ))}
+          </SortableContext>
         </div>
       )}
     </div>
@@ -337,54 +347,127 @@ export function CalculationTree({
   onSelectItem,
   onMoveItem
 }: CalculationTreeProps) {
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [draggedItem, setDraggedItem] = useState<CalculationItem | null>(null)
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
   const handleSelect = (itemId: string, position: number[]) => {
     if (onSelectItem) {
       onSelectItem(itemId, position)
     }
   }
 
+  const findItemInTree = (items: CalculationItem[], id: string): CalculationItem | null => {
+    for (const item of items) {
+      if (item.id === id) return item
+      if (item.children) {
+        const found = findItemInTree(item.children, id)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string)
+    const item = findItemInTree(items, event.active.id as string)
+    setDraggedItem(item)
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    
+    setActiveId(null)
+    setDraggedItem(null)
+    
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    // For now, implement simple reordering within the same level
+    // This is a simplified version - you can enhance it later for hierarchical moves
+    onMoveItem(active.id as string, over.id as string, 'after')
+  }
+
   return (
-    <div className="border rounded-lg overflow-hidden shadow-sm">
-      {/* Header */}
-      <div className="bg-green-50 px-3 py-3 border-b border-green-200">
-        <div className="grid grid-cols-12 gap-2 text-sm font-medium text-green-800">
-          <div className="col-span-4 pl-16">Item</div>
-          <div className="col-span-2">Quantity</div>
-          <div className="col-span-2">Unit Price</div>
-          <div className="col-span-2">Total</div>
-          <div className="col-span-2">Actions</div>
+    <DndContext 
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="border rounded-lg overflow-hidden shadow-sm">
+        {/* Header */}
+        <div className="bg-green-50 px-3 py-3 border-b border-green-200">
+          <div className="grid grid-cols-12 gap-2 text-sm font-medium text-green-800">
+            <div className="col-span-4 pl-16">Item</div>
+            <div className="col-span-2">Quantity</div>
+            <div className="col-span-2">Unit Price</div>
+            <div className="col-span-2">Total</div>
+            <div className="col-span-2">Actions</div>
+          </div>
+        </div>
+        
+        {/* Tree Content */}
+        <div className="max-h-96 overflow-y-auto bg-white">
+          {items.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <div className="mb-4">
+                <Target className="h-12 w-12 mx-auto text-gray-300" />
+              </div>
+              <h3 className="font-medium text-gray-900 mb-1">No items yet</h3>
+              <p className="text-sm">Add your first item or package to get started</p>
+            </div>
+          ) : (
+            <SortableContext 
+              items={items.map(item => item.id)} 
+              strategy={verticalListSortingStrategy}
+            >
+              {items.map((item, index) => (
+                <TreeNode
+                  key={item.id}
+                  item={item}
+                  level={0}
+                  isSelected={selectedItemId === item.id}
+                  position={[index + 1]}
+                  onAddChild={onAddChild}
+                  onAddPackage={onAddPackage}
+                  onDelete={onDelete}
+                  onUpdateQuantity={onUpdateQuantity}
+                  onUpdatePrice={onUpdatePrice}
+                  onSelect={handleSelect}
+                  onMoveItem={onMoveItem}
+                />
+              ))}
+            </SortableContext>
+          )}
         </div>
       </div>
       
-      {/* Tree Content */}
-      <div className="max-h-96 overflow-y-auto bg-white">
-        {items.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            <div className="mb-4">
-              <Target className="h-12 w-12 mx-auto text-gray-300" />
-            </div>
-            <h3 className="font-medium text-gray-900 mb-1">No items yet</h3>
-            <p className="text-sm">Add your first item or package to get started</p>
-          </div>
-        ) : (
-          items.map((item, index) => (
-            <TreeNode
-              key={item.id}
-              item={item}
-              level={0}
-              isSelected={selectedItemId === item.id}
-              position={[index + 1]}
-              onAddChild={onAddChild}
-              onAddPackage={onAddPackage}
-              onDelete={onDelete}
-              onUpdateQuantity={onUpdateQuantity}
-              onUpdatePrice={onUpdatePrice}
-              onSelect={handleSelect}
-              onMoveItem={onMoveItem}
-            />
-          ))
-        )}
-      </div>
-    </div>
+      <DragOverlay>
+        {activeId && draggedItem ? (
+          <TreeNode
+            item={draggedItem}
+            level={0}
+            isSelected={false}
+            position={[1]}
+            onAddChild={() => {}}
+            onAddPackage={() => {}}
+            onDelete={() => {}}
+            onUpdateQuantity={() => {}}
+            onUpdatePrice={() => {}}
+            onSelect={() => {}}
+            onMoveItem={() => {}}
+            isDragOverlay={true}
+          />
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   )
 }

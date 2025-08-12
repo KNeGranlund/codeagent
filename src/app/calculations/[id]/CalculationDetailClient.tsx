@@ -26,7 +26,24 @@ interface CalculationDetailClientProps {
 }
 
 export default function CalculationDetailClient({ initialCalc }: CalculationDetailClientProps) {
-  const [calc, setCalc] = useState<Calculation>(initialCalc)
+  // Initialize positions for items that don't have them
+  const initializePositions = (items: CalculationItem[], parentPosition: number[] = []): CalculationItem[] => {
+    return items.map((item, index) => {
+      const newPosition = [...parentPosition, index + 1]
+      return {
+        ...item,
+        position: newPosition,
+        children: item.children ? initializePositions(item.children, newPosition) : undefined
+      }
+    })
+  }
+
+  const calcWithPositions = {
+    ...initialCalc,
+    items: initializePositions(initialCalc.items)
+  }
+
+  const [calc, setCalc] = useState<Calculation>(calcWithPositions)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showSearchDialog, setShowSearchDialog] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
@@ -65,15 +82,17 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
       
       if (!itemData.parentId) {
         // Add to root level
-        updated.items = [...updated.items, newItem]
+        const newPosition = [updated.items.length + 1]
+        updated.items = [...updated.items, { ...newItem, position: newPosition }]
       } else {
         // Add as child - find parent and add to children
         const addToParent = (items: CalculationItem[]): CalculationItem[] => {
           return items.map(item => {
             if (item.id === itemData.parentId) {
+              const childPosition = [...(item.position || []), (item.children?.length || 0) + 1]
               return {
                 ...item,
-                children: [...(item.children || []), newItem]
+                children: [...(item.children || []), { ...newItem, position: childPosition, parentId: item.id }]
               }
             }
             if (item.children) {
@@ -295,6 +314,21 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
       }
       
       updated.items = insertItem(updated.items)
+      
+      // Recalculate positions for all items
+      const updatePositions = (items: CalculationItem[], parentPosition: number[] = []): CalculationItem[] => {
+        return items.map((item, index) => {
+          const newPosition = [...parentPosition, index + 1]
+          return {
+            ...item,
+            position: newPosition,
+            children: item.children ? updatePositions(item.children, newPosition) : undefined
+          }
+        })
+      }
+      
+      updated.items = updatePositions(updated.items)
+      
       return updated
     })
   }
