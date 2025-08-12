@@ -116,12 +116,12 @@ export function SearchDialog({ open, onOpenChange, onSelectComponent, onSelectPa
                 className="w-full"
               />
             </div>
-            <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value as ItemCategory | '')}>
+            <Select value={selectedCategory || "all"} onValueChange={(value) => setSelectedCategory(value === "all" ? "" : value as ItemCategory)}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
                 {categories.map(cat => (
                   <SelectItem key={cat} value={cat}>
                     {cat.charAt(0).toUpperCase() + cat.slice(1)}

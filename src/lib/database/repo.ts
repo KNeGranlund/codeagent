@@ -133,9 +133,11 @@ export const repo = {
       sql += ' AND category = ?'
       params.push(query.category)
     }
-    if (query?.includeFree !== undefined) {
-      sql += query.includeFree ? ' AND isFree = 1' : ' AND isFree = 0'
+    // includeFree=true means include all packages, includeFree=false means only paid packages
+    if (query?.includeFree === false) {
+      sql += ' AND isFree = 0'
     }
+    // When includeFree=true or undefined, include all packages (no additional filter needed)
     
     sql += ' ORDER BY name ASC LIMIT 50'
     const rows = db.prepare(sql).all(...params)

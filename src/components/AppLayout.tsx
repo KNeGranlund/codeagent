@@ -46,7 +46,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       icon: Database,
       children: [
         { name: 'Component Registry', href: '/components' },
-        { name: 'Packages', href: '/components/packages' },
+        { name: 'Packages', href: '/packages' },
         { name: 'Import Components', href: '/components/import' }
       ]
     },
@@ -211,6 +211,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 {pathname === '/' && 'Dashboard'}
                 {pathname.startsWith('/calculations') && 'Calculations'}
                 {pathname.startsWith('/components') && 'Components'}
+                {pathname.startsWith('/packages') && 'Packages'}
                 {pathname.startsWith('/reports') && 'Reports'}
                 {pathname.startsWith('/settings') && 'Settings'}
               </h1>

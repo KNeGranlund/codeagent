@@ -27,10 +27,24 @@ export function CalculationSettingsDialog({
   onUpdateSettings 
 }: CalculationSettingsDialogProps) {
   const [formData, setFormData] = useState<CalculationSettings>(settings)
+  
+  // Separate state for input display values to allow proper editing
+  const [inputValues, setInputValues] = useState({
+    globalMarkup: '',
+    taxRate: '',
+    overhead: '',
+    laborRate: ''
+  })
 
   // Update form data when settings prop changes
   useEffect(() => {
     setFormData(settings)
+    setInputValues({
+      globalMarkup: (settings.globalMarkup * 100).toString(),
+      taxRate: (settings.taxRate * 100).toString(),
+      overhead: settings.overhead.toString(),
+      laborRate: settings.laborRate.toString()
+    })
   }, [settings])
 
   const handleSubmit = () => {
@@ -40,14 +54,35 @@ export function CalculationSettingsDialog({
 
   const handleCancel = () => {
     setFormData(settings) // Reset to original values
+    setInputValues({
+      globalMarkup: (settings.globalMarkup * 100).toString(),
+      taxRate: (settings.taxRate * 100).toString(),
+      overhead: settings.overhead.toString(),
+      laborRate: settings.laborRate.toString()
+    })
     onOpenChange(false)
   }
 
-  const updateField = (field: keyof CalculationSettings, value: number) => {
-    setFormData(prev => ({
+  const updateField = (field: keyof CalculationSettings, inputValue: string, divisor: number = 1) => {
+    // Update display value immediately
+    const inputKey = field as keyof typeof inputValues
+    setInputValues(prev => ({
       ...prev,
-      [field]: value
+      [inputKey]: inputValue
     }))
+    
+    // Update actual data only if valid number
+    const numericValue = parseFloat(inputValue)
+    if (!isNaN(numericValue) && numericValue >= 0) {
+      setFormData(prev => ({
+        ...prev,
+        [field]: numericValue / divisor
+      }))
+    } else if (inputValue === '' || inputValue === '.') {
+      // Allow empty or partial decimal input, but keep previous valid value in formData
+      // This allows users to clear the field or type decimals without losing data
+      return
+    }
   }
 
   return (
@@ -72,8 +107,8 @@ export function CalculationSettingsDialog({
             </label>
             <Input
               type="number"
-              value={(formData.globalMarkup * 100).toFixed(1)}
-              onChange={(e) => updateField('globalMarkup', Number(e.target.value) / 100)}
+              value={inputValues.globalMarkup}
+              onChange={(e) => updateField('globalMarkup', e.target.value, 100)}
               min="0"
               max="100"
               step="0.1"
@@ -92,8 +127,8 @@ export function CalculationSettingsDialog({
             </label>
             <Input
               type="number"
-              value={(formData.taxRate * 100).toFixed(2)}
-              onChange={(e) => updateField('taxRate', Number(e.target.value) / 100)}
+              value={inputValues.taxRate}
+              onChange={(e) => updateField('taxRate', e.target.value, 100)}
               min="0"
               max="50"
               step="0.01"
@@ -112,8 +147,8 @@ export function CalculationSettingsDialog({
             </label>
             <Input
               type="number"
-              value={formData.overhead}
-              onChange={(e) => updateField('overhead', Number(e.target.value))}
+              value={inputValues.overhead}
+              onChange={(e) => updateField('overhead', e.target.value)}
               min="0"
               step="0.01"
               placeholder="0.00"
@@ -131,8 +166,8 @@ export function CalculationSettingsDialog({
             </label>
             <Input
               type="number"
-              value={formData.laborRate}
-              onChange={(e) => updateField('laborRate', Number(e.target.value))}
+              value={inputValues.laborRate}
+              onChange={(e) => updateField('laborRate', e.target.value)}
               min="0"
               step="0.01"
               placeholder="85.00"
