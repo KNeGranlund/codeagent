@@ -231,7 +231,7 @@ function TreeNode({
               key={child.id}
               item={child}
               level={level + 1}
-              isSelected={false} // Will be managed by parent
+              isSelected={false}
               position={[...position, index + 1]}
               onAddChild={onAddChild}
               onAddPackage={onAddPackage}

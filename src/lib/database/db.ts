@@ -1,19 +1,49 @@
-// better-sqlite3 in-memory DB with seed data for MVP
+// better-sqlite3 database with persistent storage for production
 import Database from 'better-sqlite3'
 import { randomUUID } from 'crypto'
 import type { Calculation, ComponentItem, Package } from '@/lib/types'
+import path from 'path'
+import fs from 'fs'
 
-// Singleton connection (in-memory exists per process)
+// Singleton connection
 let db: Database.Database | null = null
 
 export function getDb() {
   if (!db) {
-    db = new Database(':memory:')
+    // Use persistent database in production, in-memory for development
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    const dbPath = isDevelopment ? ':memory:' : getDatabasePath()
+    
+    // Ensure the data directory exists in production
+    if (!isDevelopment) {
+      const dataDir = path.dirname(dbPath)
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true })
+      }
+    }
+    
+    db = new Database(dbPath)
     db.pragma('journal_mode = WAL')
     migrate(db)
-    seed(db)
+    
+    // Only seed data if it's a new database (no calculations exist)
+    const existingCalculations = db.prepare('SELECT COUNT(*) as count FROM calculations').get() as { count: number }
+    if (existingCalculations.count === 0) {
+      seed(db)
+    }
   }
   return db
+}
+
+function getDatabasePath(): string {
+  // Use Vercel's /tmp directory for file storage
+  if (process.env.VERCEL) {
+    return '/tmp/hvac-pro.db'
+  }
+  
+  // For other platforms, use a data directory
+  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data')
+  return path.join(dataDir, 'hvac-pro.db')
 }
 
 function migrate(db: Database.Database) {

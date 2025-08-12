@@ -52,6 +52,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     { name: 'Reports', href: '/reports', icon: FileText },
     { name: 'Settings', href: '/settings', icon: Settings },
+    { name: 'Admin', href: '/admin', icon: Database },
   ]
 
   const userNavigation = [
@@ -214,6 +215,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 {pathname.startsWith('/packages') && 'Packages'}
                 {pathname.startsWith('/reports') && 'Reports'}
                 {pathname.startsWith('/settings') && 'Settings'}
+                {pathname.startsWith('/admin') && 'Administration'}
               </h1>
             </div>
 
