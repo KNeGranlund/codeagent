@@ -149,7 +149,7 @@ export default function Home() {
               Generate Report
             </CardTitle>
             <CardDescription>
-              Create professional reports and client proposals
+              Create professional reports and client proposals by Granlund
             </CardDescription>
           </CardHeader>
         </Card>
