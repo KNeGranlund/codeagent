@@ -26,7 +26,24 @@ interface CalculationDetailClientProps {
 }
 
 export default function CalculationDetailClient({ initialCalc }: CalculationDetailClientProps) {
-  const [calc, setCalc] = useState<Calculation>(initialCalc)
+  // Initialize positions for items that don't have them
+  const initializePositions = (items: CalculationItem[], parentPosition: number[] = []): CalculationItem[] => {
+    return items.map((item, index) => {
+      const newPosition = [...parentPosition, index + 1]
+      return {
+        ...item,
+        position: newPosition,
+        children: item.children ? initializePositions(item.children, newPosition) : undefined
+      }
+    })
+  }
+
+  const calcWithPositions = {
+    ...initialCalc,
+    items: initializePositions(initialCalc.items)
+  }
+
+  const [calc, setCalc] = useState<Calculation>(calcWithPositions)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showSearchDialog, setShowSearchDialog] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
@@ -65,15 +82,17 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
       
       if (!itemData.parentId) {
         // Add to root level
-        updated.items = [...updated.items, newItem]
+        const newPosition = [updated.items.length + 1]
+        updated.items = [...updated.items, { ...newItem, position: newPosition }]
       } else {
         // Add as child - find parent and add to children
         const addToParent = (items: CalculationItem[]): CalculationItem[] => {
           return items.map(item => {
             if (item.id === itemData.parentId) {
+              const childPosition = [...(item.position || []), (item.children?.length || 0) + 1]
               return {
                 ...item,
-                children: [...(item.children || []), newItem]
+                children: [...(item.children || []), { ...newItem, position: childPosition, parentId: item.id }]
               }
             }
             if (item.children) {
@@ -235,6 +254,112 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
   const handleExportExcel = () => {
     downloadCalculationExcel(calc)
     setShowExportMenu(false)
+  }
+
+  const moveItem = (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside' | 'root') => {
+    setCalc(prev => {
+      const updated = { ...prev }
+      
+      // Find and remove the dragged item from its current position
+      let draggedItem: CalculationItem | null = null
+      let draggedItemParent: string | null = null
+      
+      const removeItem = (items: CalculationItem[], parentId?: string): CalculationItem[] => {
+        const result: CalculationItem[] = []
+        
+        for (const item of items) {
+          if (item.id === draggedItemId) {
+            draggedItem = JSON.parse(JSON.stringify(item)) as CalculationItem // Deep copy
+            draggedItemParent = parentId || null
+            // Don't add to result (removing it)
+          } else {
+            if (item.children && item.children.length > 0) {
+              const updatedChildren = removeItem(item.children, item.id)
+              result.push({
+                ...item,
+                children: updatedChildren
+              })
+            } else {
+              result.push(item)
+            }
+          }
+        }
+        
+        return result
+      }
+      
+      updated.items = removeItem(updated.items)
+      
+      if (!draggedItem) return prev // Item not found
+      
+      // Handle root position (empty tree or add to root level)  
+      if (position === 'root' || targetItemId === '') {
+        updated.items = [...updated.items, Object.assign({}, draggedItem, { parentId: undefined })]
+      } else {
+        // Find the target item and insert the dragged item
+        const insertItem = (items: CalculationItem[], parentId?: string): CalculationItem[] => {
+          const result: CalculationItem[] = []
+          let targetFound = false
+          
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i]
+            
+            if (item.id === targetItemId) {
+              targetFound = true
+              
+              if (position === 'before') {
+                result.push(Object.assign({}, draggedItem, { parentId }))
+                result.push(item)
+              } else if (position === 'after') {
+                result.push(item)
+                result.push(Object.assign({}, draggedItem, { parentId }))
+              } else if (position === 'inside') {
+                result.push({
+                  ...item,
+                  children: [...(item.children || []), Object.assign({}, draggedItem, { parentId: item.id })]
+                })
+              }
+            } else {
+              // Check children first
+              if (item.children && item.children.length > 0) {
+                const updatedChildren = insertItem(item.children, item.id)
+                result.push({
+                  ...item,
+                  children: updatedChildren
+                })
+              } else {
+                result.push(item)
+              }
+            }
+          }
+          
+          return result
+        }
+        
+        updated.items = insertItem(updated.items)
+      }
+      
+      // Recalculate positions for all items - make sure this is robust
+      const updatePositions = (items: CalculationItem[], parentPosition: number[] = []): CalculationItem[] => {
+        return items.map((item, index) => {
+          // Ensure index is never negative
+          const currentIndex = Math.max(0, index)
+          const newPosition = [...parentPosition, currentIndex + 1]
+          
+          return {
+            ...item,
+            position: newPosition,
+            children: item.children && item.children.length > 0 
+              ? updatePositions(item.children, newPosition) 
+              : item.children
+          }
+        })
+      }
+      
+      updated.items = updatePositions(updated.items)
+      
+      return updated
+    })
   }
 
   const handleUpdateSettings = (newSettings: typeof calc.settings) => {
@@ -399,6 +524,7 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
           onUpdateQuantity={updateQuantity}
           onUpdatePrice={updatePrice}
           onSelectItem={handleSelectItem}
+          onMoveItem={moveItem}
         />
       </div>
 

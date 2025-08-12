@@ -37,6 +37,7 @@ export interface CalculationTotals {
 export interface CalculationItem {
   id: string
   parentId?: string
+  position?: number[]
   code?: string
   name: string
   description?: string
