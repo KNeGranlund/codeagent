@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { ChevronRight, ChevronDown, Plus, Package as PackageIcon, Wrench, Trash2, Target } from "lucide-react"
+import { ChevronRight, ChevronDown, Plus, Package as PackageIcon, Wrench, Trash2, Target, GripVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { CalculationItem } from "@/lib/types"
 
@@ -16,6 +16,7 @@ interface TreeNodeProps {
   onUpdateQuantity: (itemId: string, quantity: number) => void
   onUpdatePrice: (itemId: string, price: number) => void
   onSelect: (itemId: string, position: number[]) => void
+  onMoveItem: (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside') => void
 }
 
 function TreeNode({ 
@@ -28,12 +29,14 @@ function TreeNode({
   onDelete, 
   onUpdateQuantity, 
   onUpdatePrice,
-  onSelect
+  onSelect,
+  onMoveItem
 }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [editQty, setEditQty] = useState(item.quantity)
   const [editPrice, setEditPrice] = useState(item.unitPrice)
+  const [isDragOver, setIsDragOver] = useState<'before' | 'after' | 'inside' | null>(null)
   
   const hasChildren = item.children && item.children.length > 0
   const materialCost = item.quantity * item.unitPrice
@@ -68,17 +71,80 @@ function TreeNode({
 
   const positionString = position.join('.')
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', item.id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = e.clientY - rect.top
+    const height = rect.height
+    
+    if (y < height * 0.25) {
+      setIsDragOver('before')
+    } else if (y > height * 0.75) {
+      setIsDragOver('after')
+    } else {
+      setIsDragOver('inside')
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX
+    const y = e.clientY
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setIsDragOver(null)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const draggedItemId = e.dataTransfer.getData('text/plain')
+    
+    if (draggedItemId !== item.id && isDragOver) {
+      onMoveItem(draggedItemId, item.id, isDragOver)
+    }
+    
+    setIsDragOver(null)
+  }
+
   return (
-    <div className={`border-b border-gray-100 ${isSelected ? 'bg-green-50 border-green-300' : ''}`}>
+    <div className={`border-b border-gray-100 ${isSelected ? 'bg-green-50 border-green-300' : ''} relative`}>
+      {/* Drop indicator lines */}
+      {isDragOver === 'before' && (
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-green-500 z-10" />
+      )}
+      {isDragOver === 'after' && (
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-500 z-10" />
+      )}
+      {isDragOver === 'inside' && (
+        <div className="absolute inset-0 bg-green-100 border-2 border-green-400 border-dashed z-10 opacity-50" />
+      )}
+      
       <div 
         className={`flex items-center py-3 px-3 hover:bg-gray-50 cursor-pointer transition-colors ${
           isSelected ? 'bg-green-100 hover:bg-green-100' : ''
         }`}
         style={{ paddingLeft: `${indentWidth + 12}px` }}
         onClick={() => onSelect(item.id, position)}
+        draggable
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
-        {/* Position Indicator */}
-        <div className="flex items-center gap-2 mr-3">
+        {/* Drag Handle */}
+        <div 
+          className="flex items-center gap-2 mr-3 cursor-grab active:cursor-grabbing"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-4 w-4 text-gray-400 hover:text-gray-600" />
           <span className="text-xs text-gray-500 min-w-[40px] font-mono">
             {positionString}
           </span>
@@ -239,6 +305,7 @@ function TreeNode({
               onUpdateQuantity={onUpdateQuantity}
               onUpdatePrice={onUpdatePrice}
               onSelect={onSelect}
+              onMoveItem={onMoveItem}
             />
           ))}
         </div>
@@ -256,6 +323,7 @@ interface CalculationTreeProps {
   onUpdateQuantity: (itemId: string, quantity: number) => void
   onUpdatePrice: (itemId: string, price: number) => void
   onSelectItem?: (itemId: string, position: number[]) => void
+  onMoveItem: (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside') => void
 }
 
 export function CalculationTree({ 
@@ -266,7 +334,8 @@ export function CalculationTree({
   onDelete, 
   onUpdateQuantity, 
   onUpdatePrice,
-  onSelectItem
+  onSelectItem,
+  onMoveItem
 }: CalculationTreeProps) {
   const handleSelect = (itemId: string, position: number[]) => {
     if (onSelectItem) {
@@ -311,6 +380,7 @@ export function CalculationTree({
               onUpdateQuantity={onUpdateQuantity}
               onUpdatePrice={onUpdatePrice}
               onSelect={handleSelect}
+              onMoveItem={onMoveItem}
             />
           ))
         )}

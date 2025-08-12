@@ -237,6 +237,68 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
     setShowExportMenu(false)
   }
 
+  const moveItem = (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside') => {
+    setCalc(prev => {
+      const updated = { ...prev }
+      
+      // Find and remove the dragged item from its current position
+      let draggedItem: CalculationItem | null = null
+      
+      const removeItem = (items: CalculationItem[]): CalculationItem[] => {
+        return items.filter(item => {
+          if (item.id === draggedItemId) {
+            draggedItem = { ...item } // Make a copy
+            return false
+          }
+          if (item.children) {
+            item.children = removeItem(item.children)
+          }
+          return true
+        })
+      }
+      
+      updated.items = removeItem(updated.items)
+      
+      if (!draggedItem) return prev // Item not found
+      
+      // Find the target item and insert the dragged item
+      const insertItem = (items: CalculationItem[], parentId?: string): CalculationItem[] => {
+        const result: CalculationItem[] = []
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i]
+          
+          if (item.id === targetItemId) {
+            if (position === 'before') {
+              result.push({ ...draggedItem!, parentId })
+              result.push(item)
+            } else if (position === 'after') {
+              result.push(item)
+              result.push({ ...draggedItem!, parentId })
+            } else if (position === 'inside') {
+              result.push({
+                ...item,
+                children: [...(item.children || []), { ...draggedItem!, parentId: item.id }]
+              })
+            }
+          } else {
+            if (item.children) {
+              result.push({
+                ...item,
+                children: insertItem(item.children, item.id)
+              })
+            } else {
+              result.push(item)
+            }
+          }
+        }
+        return result
+      }
+      
+      updated.items = insertItem(updated.items)
+      return updated
+    })
+  }
+
   const handleUpdateSettings = (newSettings: typeof calc.settings) => {
     setCalc(prev => {
       const updated = {
@@ -399,6 +461,7 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
           onUpdateQuantity={updateQuantity}
           onUpdatePrice={updatePrice}
           onSelectItem={handleSelectItem}
+          onMoveItem={moveItem}
         />
       </div>
 
