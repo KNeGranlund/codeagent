@@ -15,6 +15,9 @@ import {
   DragOverlay,
   DragStartEvent,
   DragOverEvent,
+  pointerWithin,
+  rectIntersection,
+  useDroppable,
 } from '@dnd-kit/core'
 import {
   arrayMove,
@@ -38,8 +41,37 @@ interface TreeNodeProps {
   onUpdateQuantity: (itemId: string, quantity: number) => void
   onUpdatePrice: (itemId: string, price: number) => void
   onSelect: (itemId: string, position: number[]) => void
-  onMoveItem: (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside') => void
+  onMoveItem: (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside' | 'root') => void
   isDragOverlay?: boolean
+  activeId?: string | null
+}
+
+// Droppable zone component for better drop feedback
+function DropZone({ 
+  id, 
+  children, 
+  isActive 
+}: { 
+  id: string
+  children: React.ReactNode
+  isActive?: boolean 
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id,
+    data: {
+      type: 'dropzone',
+      id
+    }
+  })
+
+  return (
+    <div 
+      ref={setNodeRef}
+      className={`${isOver && isActive ? 'bg-blue-50 border-2 border-dashed border-blue-300' : ''}`}
+    >
+      {children}
+    </div>
+  )
 }
 
 function TreeNode({ 
@@ -54,12 +86,14 @@ function TreeNode({
   onUpdatePrice,
   onSelect,
   onMoveItem,
-  isDragOverlay = false
+  isDragOverlay = false,
+  activeId
 }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [editQty, setEditQty] = useState(item.quantity)
   const [editPrice, setEditPrice] = useState(item.unitPrice)
+  const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after' | 'inside' | null>(null)
   
   const {
     attributes,
@@ -68,11 +102,15 @@ function TreeNode({
     transform,
     transition,
     isDragging,
+    isOver,
+    active,
   } = useSortable({ 
     id: item.id,
     data: {
       type: 'item',
-      item: item
+      item: item,
+      position: position,
+      level: level
     }
   })
   
@@ -115,6 +153,22 @@ function TreeNode({
 
   const positionString = position.join('.')
 
+  // Handle drag over effects for better visual feedback
+  const getDragOverStyles = () => {
+    if (!isOver || isDragging) return ''
+    
+    switch (dragOverPosition) {
+      case 'before':
+        return 'border-t-4 border-blue-500 bg-blue-50'
+      case 'after':
+        return 'border-b-4 border-blue-500 bg-blue-50'
+      case 'inside':
+        return 'bg-blue-100 border-2 border-blue-300'
+      default:
+        return ''
+    }
+  }
+
   // Don't show drag behavior in drag overlay
   if (isDragOverlay) {
     return (
@@ -134,7 +188,7 @@ function TreeNode({
     <div 
       ref={setNodeRef} 
       style={style}
-      className={`border-b border-gray-100 ${isSelected ? 'bg-green-50 border-green-300' : ''} relative`}
+      className={`border-b border-gray-100 relative ${isSelected ? 'bg-green-50 border-green-300' : ''} ${getDragOverStyles()}`}
     >
       <div 
         className={`flex items-center py-3 px-3 hover:bg-gray-50 cursor-pointer transition-colors ${
@@ -296,29 +350,45 @@ function TreeNode({
 
       {/* Children */}
       {isExpanded && hasChildren && (
-        <div>
-          <SortableContext 
-            items={item.children!.map(child => child.id)} 
-            strategy={verticalListSortingStrategy}
-          >
-            {item.children!.map((child, index) => (
-              <TreeNode
-                key={child.id}
-                item={child}
-                level={level + 1}
-                isSelected={false}
-                position={[...position, index + 1]}
-                onAddChild={onAddChild}
-                onAddPackage={onAddPackage}
-                onDelete={onDelete}
-                onUpdateQuantity={onUpdateQuantity}
-                onUpdatePrice={onUpdatePrice}
-                onSelect={onSelect}
-                onMoveItem={onMoveItem}
-              />
-            ))}
-          </SortableContext>
-        </div>
+        <DropZone id={`${item.id}-children`} isActive={!!activeId}>
+          <div className="relative">
+            <SortableContext 
+              items={item.children!.map(child => child.id)} 
+              strategy={verticalListSortingStrategy}
+            >
+              {item.children!.map((child, index) => (
+                <div key={child.id} className="relative">
+                  {/* Drop zone before each child */}
+                  <DropZone id={`${child.id}-before`} isActive={!!activeId}>
+                    <div className="h-1" />
+                  </DropZone>
+                  
+                  <TreeNode
+                    item={child}
+                    level={level + 1}
+                    isSelected={false}
+                    position={[...position, index + 1]}
+                    onAddChild={onAddChild}
+                    onAddPackage={onAddPackage}
+                    onDelete={onDelete}
+                    onUpdateQuantity={onUpdateQuantity}
+                    onUpdatePrice={onUpdatePrice}
+                    onSelect={onSelect}
+                    onMoveItem={onMoveItem}
+                    activeId={activeId}
+                  />
+                  
+                  {/* Drop zone after last child */}
+                  {index === item.children!.length - 1 && (
+                    <DropZone id={`${child.id}-after`} isActive={!!activeId}>
+                      <div className="h-1" />
+                    </DropZone>
+                  )}
+                </div>
+              ))}
+            </SortableContext>
+          </div>
+        </DropZone>
       )}
     </div>
   )
@@ -333,7 +403,7 @@ interface CalculationTreeProps {
   onUpdateQuantity: (itemId: string, quantity: number) => void
   onUpdatePrice: (itemId: string, price: number) => void
   onSelectItem?: (itemId: string, position: number[]) => void
-  onMoveItem: (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside') => void
+  onMoveItem: (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside' | 'root') => void
 }
 
 export function CalculationTree({ 
@@ -349,9 +419,15 @@ export function CalculationTree({
 }: CalculationTreeProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [draggedItem, setDraggedItem] = useState<CalculationItem | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after' | 'inside' | null>(null)
   
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Prevent accidental drags
+      }
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -380,26 +456,125 @@ export function CalculationTree({
     setDraggedItem(item)
   }
 
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event
+    
+    if (!over || active.id === over.id) {
+      setOverId(null)
+      setDragOverPosition(null)
+      return
+    }
+
+    setOverId(over.id as string)
+
+    // Determine drop position based on the drop zone ID
+    const overIdStr = over.id as string
+    
+    if (overIdStr.endsWith('-before')) {
+      setDragOverPosition('before')
+    } else if (overIdStr.endsWith('-after')) {
+      setDragOverPosition('after')
+    } else if (overIdStr.endsWith('-children') || overIdStr === 'root-container' || overIdStr === 'empty-tree') {
+      setDragOverPosition('inside')
+    } else {
+      // Direct drop on item - default to inside if it has children, otherwise after
+      const overData = over.data.current
+      if (overData && 'item' in overData) {
+        const overItem = overData.item as CalculationItem
+        setDragOverPosition(overItem.children && overItem.children.length > 0 ? 'inside' : 'after')
+      } else {
+        setDragOverPosition('after')
+      }
+    }
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     
     setActiveId(null)
     setDraggedItem(null)
+    setOverId(null)
+    setDragOverPosition(null)
     
     if (!over || active.id === over.id) {
       return
     }
 
-    // For now, implement simple reordering within the same level
-    // This is a simplified version - you can enhance it later for hierarchical moves
-    onMoveItem(active.id as string, over.id as string, 'after')
+    const activeData = active.data.current
+    const overData = over.data.current
+
+    if (!activeData || !activeData.item) {
+      return
+    }
+
+    const activeItem = activeData.item as CalculationItem
+    const overIdStr = over.id as string
+    
+    // Handle empty tree case
+    if (overIdStr === 'empty-tree') {
+      onMoveItem(active.id as string, '', 'root')
+      return
+    }
+    
+    // Determine target item ID and position from drop zone
+    let targetItemId: string
+    let movePosition: 'before' | 'after' | 'inside'
+    
+    if (overIdStr.endsWith('-before')) {
+      targetItemId = overIdStr.replace('-before', '')
+      movePosition = 'before'
+    } else if (overIdStr.endsWith('-after')) {
+      targetItemId = overIdStr.replace('-after', '')
+      movePosition = 'after'
+    } else if (overIdStr.endsWith('-children')) {
+      targetItemId = overIdStr.replace('-children', '')
+      movePosition = 'inside'
+    } else if (overIdStr === 'root-container') {
+      // Drop at root level - add at the end
+      if (items.length > 0) {
+        targetItemId = items[items.length - 1].id
+        movePosition = 'after'
+      } else {
+        onMoveItem(active.id as string, '', 'root')
+        return
+      }
+    } else {
+      // Direct drop on item
+      targetItemId = overIdStr
+      if (overData && 'item' in overData) {
+        const overItem = overData.item as CalculationItem
+        movePosition = overItem.children && overItem.children.length > 0 ? 'inside' : 'after'
+      } else {
+        movePosition = 'after'
+      }
+    }
+
+    // Prevent moving an item into its own descendant
+    if (isDescendant(activeItem, targetItemId)) {
+      return
+    }
+
+    onMoveItem(active.id as string, targetItemId, movePosition)
+  }
+
+  // Helper function to check if target is a descendant of source
+  const isDescendant = (source: CalculationItem, targetId: string): boolean => {
+    if (!source.children) return false
+    
+    for (const child of source.children) {
+      if (child.id === targetId) return true
+      if (isDescendant(child, targetId)) return true
+    }
+    
+    return false
   }
 
   return (
     <DndContext 
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={rectIntersection}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div className="border rounded-lg overflow-hidden shadow-sm">
@@ -417,35 +592,53 @@ export function CalculationTree({
         {/* Tree Content */}
         <div className="max-h-96 overflow-y-auto bg-white">
           {items.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <div className="mb-4">
-                <Target className="h-12 w-12 mx-auto text-gray-300" />
+            <DropZone id="empty-tree" isActive={!!activeId}>
+              <div className="p-8 text-center text-gray-500">
+                <div className="mb-4">
+                  <Target className="h-12 w-12 mx-auto text-gray-300" />
+                </div>
+                <h3 className="font-medium text-gray-900 mb-1">No items yet</h3>
+                <p className="text-sm">Add your first item or package to get started</p>
               </div>
-              <h3 className="font-medium text-gray-900 mb-1">No items yet</h3>
-              <p className="text-sm">Add your first item or package to get started</p>
-            </div>
+            </DropZone>
           ) : (
-            <SortableContext 
-              items={items.map(item => item.id)} 
-              strategy={verticalListSortingStrategy}
-            >
-              {items.map((item, index) => (
-                <TreeNode
-                  key={item.id}
-                  item={item}
-                  level={0}
-                  isSelected={selectedItemId === item.id}
-                  position={[index + 1]}
-                  onAddChild={onAddChild}
-                  onAddPackage={onAddPackage}
-                  onDelete={onDelete}
-                  onUpdateQuantity={onUpdateQuantity}
-                  onUpdatePrice={onUpdatePrice}
-                  onSelect={handleSelect}
-                  onMoveItem={onMoveItem}
-                />
-              ))}
-            </SortableContext>
+            <DropZone id="root-container" isActive={!!activeId}>
+              <SortableContext 
+                items={items.map(item => item.id)} 
+                strategy={verticalListSortingStrategy}
+              >
+                {items.map((item, index) => (
+                  <div key={item.id} className="relative">
+                    {/* Drop zone before each root item */}
+                    {index === 0 && (
+                      <DropZone id={`${item.id}-before`} isActive={!!activeId}>
+                        <div className="h-1" />
+                      </DropZone>
+                    )}
+                    
+                    <TreeNode
+                      item={item}
+                      level={0}
+                      isSelected={selectedItemId === item.id}
+                      position={[index + 1]}
+                      onAddChild={onAddChild}
+                      onAddPackage={onAddPackage}
+                      onDelete={onDelete}
+                      onUpdateQuantity={onUpdateQuantity}
+                      onUpdatePrice={onUpdatePrice}
+                      onSelect={handleSelect}
+                      onMoveItem={onMoveItem}
+                      activeId={activeId}
+                    />
+                    
+                    {/* Drop zone after each root item */}
+                    <DropZone id={`${item.id}-after`} isActive={!!activeId}>
+                      <div className="h-1" />
+                    </DropZone>
+                  </div>
+                ))}
+              </SortableContext>
+            </DropZone>
           )}
         </div>
       </div>

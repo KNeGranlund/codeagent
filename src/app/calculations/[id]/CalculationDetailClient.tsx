@@ -256,73 +256,102 @@ export default function CalculationDetailClient({ initialCalc }: CalculationDeta
     setShowExportMenu(false)
   }
 
-  const moveItem = (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside') => {
+  const moveItem = (draggedItemId: string, targetItemId: string, position: 'before' | 'after' | 'inside' | 'root') => {
     setCalc(prev => {
       const updated = { ...prev }
       
       // Find and remove the dragged item from its current position
       let draggedItem: CalculationItem | null = null
+      let draggedItemParent: string | null = null
       
-      const removeItem = (items: CalculationItem[]): CalculationItem[] => {
-        return items.filter(item => {
-          if (item.id === draggedItemId) {
-            draggedItem = { ...item } // Make a copy
-            return false
-          }
-          if (item.children) {
-            item.children = removeItem(item.children)
-          }
-          return true
-        })
-      }
-      
-      updated.items = removeItem(updated.items)
-      
-      if (!draggedItem) return prev // Item not found
-      
-      // Find the target item and insert the dragged item
-      const insertItem = (items: CalculationItem[], parentId?: string): CalculationItem[] => {
+      const removeItem = (items: CalculationItem[], parentId?: string): CalculationItem[] => {
         const result: CalculationItem[] = []
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i]
-          
-          if (item.id === targetItemId) {
-            if (position === 'before') {
-              result.push({ ...draggedItem!, parentId })
-              result.push(item)
-            } else if (position === 'after') {
-              result.push(item)
-              result.push({ ...draggedItem!, parentId })
-            } else if (position === 'inside') {
-              result.push({
-                ...item,
-                children: [...(item.children || []), { ...draggedItem!, parentId: item.id }]
-              })
-            }
+        
+        for (const item of items) {
+          if (item.id === draggedItemId) {
+            draggedItem = JSON.parse(JSON.stringify(item)) as CalculationItem // Deep copy
+            draggedItemParent = parentId || null
+            // Don't add to result (removing it)
           } else {
-            if (item.children) {
+            if (item.children && item.children.length > 0) {
+              const updatedChildren = removeItem(item.children, item.id)
               result.push({
                 ...item,
-                children: insertItem(item.children, item.id)
+                children: updatedChildren
               })
             } else {
               result.push(item)
             }
           }
         }
+        
         return result
       }
       
-      updated.items = insertItem(updated.items)
+      updated.items = removeItem(updated.items)
       
-      // Recalculate positions for all items
+      if (!draggedItem) return prev // Item not found
+      
+      // Handle root position (empty tree or add to root level)  
+      if (position === 'root' || targetItemId === '') {
+        updated.items = [...updated.items, Object.assign({}, draggedItem, { parentId: undefined })]
+      } else {
+        // Find the target item and insert the dragged item
+        const insertItem = (items: CalculationItem[], parentId?: string): CalculationItem[] => {
+          const result: CalculationItem[] = []
+          let targetFound = false
+          
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i]
+            
+            if (item.id === targetItemId) {
+              targetFound = true
+              
+              if (position === 'before') {
+                result.push(Object.assign({}, draggedItem, { parentId }))
+                result.push(item)
+              } else if (position === 'after') {
+                result.push(item)
+                result.push(Object.assign({}, draggedItem, { parentId }))
+              } else if (position === 'inside') {
+                result.push({
+                  ...item,
+                  children: [...(item.children || []), Object.assign({}, draggedItem, { parentId: item.id })]
+                })
+              }
+            } else {
+              // Check children first
+              if (item.children && item.children.length > 0) {
+                const updatedChildren = insertItem(item.children, item.id)
+                result.push({
+                  ...item,
+                  children: updatedChildren
+                })
+              } else {
+                result.push(item)
+              }
+            }
+          }
+          
+          return result
+        }
+        
+        updated.items = insertItem(updated.items)
+      }
+      
+      // Recalculate positions for all items - make sure this is robust
       const updatePositions = (items: CalculationItem[], parentPosition: number[] = []): CalculationItem[] => {
         return items.map((item, index) => {
-          const newPosition = [...parentPosition, index + 1]
+          // Ensure index is never negative
+          const currentIndex = Math.max(0, index)
+          const newPosition = [...parentPosition, currentIndex + 1]
+          
           return {
             ...item,
             position: newPosition,
-            children: item.children ? updatePositions(item.children, newPosition) : undefined
+            children: item.children && item.children.length > 0 
+              ? updatePositions(item.children, newPosition) 
+              : item.children
           }
         })
       }
