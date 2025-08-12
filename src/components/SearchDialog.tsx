@@ -23,7 +23,7 @@ interface SearchDialogProps {
 
 export function SearchDialog({ open, onOpenChange, onSelectComponent, onSelectPackage }: SearchDialogProps) {
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<ItemCategory | ''>('')
+  const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all')
   const [searchType, setSearchType] = useState<'all' | 'components' | 'packages'>('all')
   const [components, setComponents] = useState<ComponentItem[]>([])
   const [packages, setPackages] = useState<Package[]>([])
@@ -47,7 +47,7 @@ export function SearchDialog({ open, onOpenChange, onSelectComponent, onSelectPa
       if (searchType === 'all' || searchType === 'components') {
         const componentParams = new URLSearchParams()
         if (searchQuery) componentParams.set('q', searchQuery)
-        if (selectedCategory) componentParams.set('category', selectedCategory)
+        if (selectedCategory && selectedCategory !== 'all') componentParams.set('category', selectedCategory)
         promises.push(fetch(`/api/components?${componentParams}`).then(r => r.json()))
       } else {
         promises.push(Promise.resolve([]))
@@ -56,7 +56,7 @@ export function SearchDialog({ open, onOpenChange, onSelectComponent, onSelectPa
       if (searchType === 'all' || searchType === 'packages') {
         const packageParams = new URLSearchParams()
         if (searchQuery) packageParams.set('q', searchQuery)
-        if (selectedCategory) packageParams.set('category', selectedCategory)
+        if (selectedCategory && selectedCategory !== 'all') packageParams.set('category', selectedCategory)
         packageParams.set('includeFree', 'true')
         promises.push(fetch(`/api/packages?${packageParams}`).then(r => r.json()))
       } else {
@@ -75,7 +75,7 @@ export function SearchDialog({ open, onOpenChange, onSelectComponent, onSelectPa
 
   const handleReset = () => {
     setSearchQuery('')
-    setSelectedCategory('')
+    setSelectedCategory('all')
     setSearchType('all')
   }
 
@@ -116,12 +116,12 @@ export function SearchDialog({ open, onOpenChange, onSelectComponent, onSelectPa
                 className="w-full"
               />
             </div>
-            <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value as ItemCategory | '')}>
+            <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value as ItemCategory | 'all')}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
                 {categories.map(cat => (
                   <SelectItem key={cat} value={cat}>
                     {cat.charAt(0).toUpperCase() + cat.slice(1)}

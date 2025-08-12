@@ -26,7 +26,7 @@ export function AddItemDialog({ open, onOpenChange, onAddItem, parentId }: AddIt
   const [components, setComponents] = useState<ComponentItem[]>([])
   const [packages, setPackages] = useState<Package[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<ItemCategory | ''>('')
+  const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all')
   const [isLoading, setIsLoading] = useState(false)
   
   // Custom item form
@@ -60,7 +60,7 @@ export function AddItemDialog({ open, onOpenChange, onAddItem, parentId }: AddIt
     try {
       const params = new URLSearchParams()
       if (searchQuery) params.set('q', searchQuery)
-      if (selectedCategory) params.set('category', selectedCategory)
+      if (selectedCategory && selectedCategory !== 'all') params.set('category', selectedCategory)
       
       const response = await fetch(`/api/components?${params}`)
       const data = await response.json()
@@ -77,7 +77,7 @@ export function AddItemDialog({ open, onOpenChange, onAddItem, parentId }: AddIt
     try {
       const params = new URLSearchParams()
       if (searchQuery) params.set('q', searchQuery)
-      if (selectedCategory) params.set('category', selectedCategory)
+      if (selectedCategory && selectedCategory !== 'all') params.set('category', selectedCategory)
       params.set('includeFree', 'true') // Include both free and paid packages
       
       const response = await fetch(`/api/packages?${params}`)
@@ -174,7 +174,7 @@ export function AddItemDialog({ open, onOpenChange, onAddItem, parentId }: AddIt
       isFree: false
     })
     setSearchQuery('')
-    setSelectedCategory('')
+    setSelectedCategory('all')
   }
 
   const handleOpenChange = (open: boolean) => {
@@ -361,12 +361,12 @@ export function AddItemDialog({ open, onOpenChange, onAddItem, parentId }: AddIt
                   className="w-full"
                 />
               </div>
-              <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value as ItemCategory | '')}>
+              <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value as ItemCategory | 'all')}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Filter by category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value="all">All Categories</SelectItem>
                   {categories.map(cat => (
                     <SelectItem key={cat} value={cat}>
                       {cat.charAt(0).toUpperCase() + cat.slice(1)}
@@ -426,12 +426,12 @@ export function AddItemDialog({ open, onOpenChange, onAddItem, parentId }: AddIt
                   className="w-full"
                 />
               </div>
-              <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value as ItemCategory | '')}>
+              <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value as ItemCategory | 'all')}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Filter by category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value="all">All Categories</SelectItem>
                   {categories.map(cat => (
                     <SelectItem key={cat} value={cat}>
                       {cat.charAt(0).toUpperCase() + cat.slice(1)}
