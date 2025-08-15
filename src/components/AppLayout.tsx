@@ -50,6 +50,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         { name: 'Import Components', href: '/components/import' }
       ]
     },
+    { name: 'BOM Management', href: '/bom', icon: Package },
     { name: 'Reports', href: '/reports', icon: FileText },
     { name: 'Settings', href: '/settings', icon: Settings },
     { name: 'Admin', href: '/admin', icon: Database },
@@ -213,6 +214,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 {pathname.startsWith('/calculations') && 'Calculations'}
                 {pathname.startsWith('/components') && 'Components'}
                 {pathname.startsWith('/packages') && 'Packages'}
+                {pathname.startsWith('/bom') && 'BOM Management'}
                 {pathname.startsWith('/reports') && 'Reports'}
                 {pathname.startsWith('/settings') && 'Settings'}
                 {pathname.startsWith('/admin') && 'Administration'}
